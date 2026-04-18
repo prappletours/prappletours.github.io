@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Plitvice Lakes — Walking Guide</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiUGxpdHZpY2UgR3VpZGUiLCJzaG9ydF9uYW1lIjoiUGxpdHZpY2UiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBhMWQxZCIsInRoZW1lX2NvbG9yIjoiIzBhMWQxZCJ9">
+<meta name="theme-color" content="#0a1d1d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #0a1d1d;
+    --bg2: #0f2b2b;
+    --bg3: #163838;
+    --card: #122e2e;
+    --card-hover: #1a3d3d;
+    --accent: #4ecdc4;
+    --accent2: #2ab7a9;
+    --water: #45b7d1;
+    --text: #e8f4f0;
+    --text2: #a0c4bc;
+    --text3: #6a9e94;
+    --orange: #f4a261;
+    --red: #e07a5f;
+    --green: #81b29a;
+    --radius: 14px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    background: linear-gradient(180deg, var(--bg) 60%, transparent);
+    padding: 12px 16px 20px;
+  }
+  .header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--water));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .subtitle {
+    font-size: 12px;
+    color: var(--text3);
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+  }
+  .status-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .status-dot.speaking { background: var(--orange); box-shadow: 0 0 6px var(--orange); animation: pulse 1.2s ease infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.4); }
+  }
+
+  /* ── Map ── */
+  #map {
+    width: 100%;
+    height: 200px;
+    border-radius: var(--radius);
+    margin: 0 0 6px;
+    border: 1px solid var(--bg3);
+  }
+  .map-wrap { padding: 0 16px; }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    padding: 0 16px;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 0;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text3);
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    color: var(--accent);
+    background: var(--bg3);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(78,205,196,0.1);
+  }
+
+  /* ── Cards ── */
+  .cards-container { padding: 0 16px 100px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--bg3);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .card:active, .card.nearby { background: var(--card-hover); }
+  .card.nearby::before { opacity: 1; }
+  .card.nearby { border-color: rgba(78,205,196,0.3); }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .card-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 16px;
+    line-height: 1.3;
+    flex: 1;
+  }
+  .card-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .badge-distance {
+    background: rgba(78,205,196,0.15);
+    color: var(--accent);
+  }
+  .badge-category {
+    background: rgba(244,162,97,0.15);
+    color: var(--orange);
+  }
+  .card-oneliner {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.4;
+  }
+
+  /* ── Expanded card ── */
+  .card-detail {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--bg);
+    overflow-y: auto;
+    padding: 0;
+    display: none;
+    animation: slideUp 0.3s ease;
+  }
+  .card-detail.open { display: block; }
+
+  @keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .detail-header {
+    position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(180deg, var(--bg) 80%, transparent);
+    padding: 16px 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .detail-back {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid rgba(78,205,196,0.2);
+    color: var(--text);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .detail-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    flex: 1;
+  }
+  .detail-body {
+    padding: 0 20px 100px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text2);
+  }
+  .detail-body p { margin-bottom: 14px; }
+
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px;
+    margin-bottom: 20px;
+  }
+  .action-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--bg3);
+    background: var(--bg2);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .action-btn.primary {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+  .action-btn.speaking-btn {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: var(--bg);
+  }
+
+  /* ── Notification toast ── */
+  .toast {
+    position: fixed;
+    bottom: 20px; left: 16px; right: 16px;
+    z-index: 300;
+    background: var(--card);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    animation: toastIn 0.3s ease;
+    cursor: pointer;
+  }
+  .toast.show { display: flex; }
+  @keyframes toastIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .toast-icon {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(78,205,196,0.15);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .toast-text { flex: 1; }
+  .toast-title { font-weight: 600; font-size: 14px; }
+  .toast-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+  /* ── Nav btn ── */
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--water);
+    padding: 6px 10px;
+    background: rgba(69,183,209,0.1);
+    border: 1px solid rgba(69,183,209,0.2);
+    border-radius: 8px;
+    text-decoration: none;
+    margin-top: 4px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text3);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+  /* ── Leaflet overrides ── */
+  .leaflet-container { background: var(--bg2); }
+  .user-marker {
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border: 3px solid var(--bg);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--accent);
+  }
+  .poi-marker {
+    width: 10px; height: 10px;
+    background: var(--orange);
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    opacity: 0.8;
+  }
+  .poi-marker.nearby-marker {
+    background: var(--accent);
+    opacity: 1;
+    box-shadow: 0 0 8px var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Plitvice Lakes</h1>
+  <div class="subtitle">National Park — Walking Guide</div>
+  <div class="status-bar">
+    <div class="status-dot" id="gpsDot"></div>
+    <span id="gpsStatus">Waiting for location…</span>
+    <span style="margin-left:auto" id="nearbyCount"></span>
+  </div>
+</div>
+
+<div class="map-wrap">
+  <div id="map"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="nearby" onclick="switchTab('nearby')">📍 Nearby</div>
+  <div class="tab" data-tab="general" onclick="switchTab('general')">📖 General</div>
+</div>
+
+<div class="cards-container" id="cardsContainer"></div>
+
+<div class="card-detail" id="detailView">
+  <div class="detail-header">
+    <div class="detail-back" onclick="closeDetail()">←</div>
+    <div class="detail-title" id="detailTitle"></div>
+  </div>
+  <div class="detail-actions">
+    <button class="action-btn primary" id="speakBtn" onclick="toggleSpeak()">
+      <span id="speakIcon">🔊</span> <span id="speakLabel">Listen</span>
+    </button>
+    <button class="action-btn" id="navBtn" onclick="navigateTo()" style="display:none">
+      🧭 Navigate
+    </button>
+  </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<div class="toast" id="toast" onclick="onToastTap()">
+  <div class="toast-icon">📍</div>
+  <div class="toast-text">
+    <div class="toast-title" id="toastTitle"></div>
+    <div class="toast-sub" id="toastSub">Tap to learn more</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  POI DATA — Plitvice Lakes National Park
+// ═══════════════════════════════════════════
+
+const POI_DATA = {
+  // Location-based POIs (lat/lon attached)
+  located: [
+    {
+      id: "entrance1",
+      name: "Entrance 1 (Lower Lakes)",
+      lat: 44.9054,
+      lon: 15.6162,
+      category: "Infrastructure",
+      one_liner: "Main entry point, gateway to the Lower Lakes canyon.",
+      summary: `Welcome to Entrance 1 — this is where most visitors begin their journey into Plitvice, and it drops you right into the dramatic stuff. From here you're heading down into the Lower Lakes, which sit in a narrow limestone canyon with sheer cliffs on either side. It's a completely different vibe from the gentler, forested Upper Lakes.\n\nBefore you head in, know that this entrance has luggage storage, restrooms, an info booth with trail maps, and a small café. There's also a gift shop if you want to grab a map poster later. The parking lot connects to intercity bus stops, so this is where most day-trippers from Zagreb or Zadar arrive.\n\nThe park uses a system of marked routes labeled A through K, combining walking, electric boats, and a panoramic shuttle train. The simplest Lower Lakes circuit from here is Route A — about 2 to 3 hours. But honestly, give yourself more time if you can. The boardwalks through the lower canyon are some of the most spectacular in the entire park.`
+    },
+    {
+      id: "entrance2",
+      name: "Entrance 2 (Upper Lakes)",
+      lat: 44.8804,
+      lon: 15.6070,
+      category: "Infrastructure",
+      one_liner: "Southern entry near the Upper Lakes and park hotels.",
+      summary: `Entrance 2 sits on the southern end of the park, right next to the P1 boat terminal on Lake Kozjak — the big lake that separates the Upper and Lower systems. If you're staying at one of the park hotels — Jezero, Plitvice, or Bellevue — this is your door.\n\nFrom here, you can hop on the boat across Kozjak to reach P2, which puts you at the start of the Upper Lakes walking trail. The Upper Lakes are formed on dolomite rock, which gives them a slightly different character — wider, more forested, with cascading waterfalls linking them in a long chain that climbs about 130 meters over roughly 8 kilometers.\n\nThe shuttle train stops ST1 and ST2 are accessible from here, which is useful if you want to skip to the far end of the Upper Lakes and walk back downhill — a much easier circuit. The info booth here has the same panoramic trail maps as Entrance 1 and can help you pick a route based on how much time and energy you have.`
+    },
+    {
+      id: "veliki_slap",
+      name: "Veliki Slap (Great Waterfall)",
+      lat: 44.9043,
+      lon: 15.6088,
+      category: "Waterfall",
+      one_liner: "At 78 meters, the tallest waterfall in Croatia.",
+      summary: `This is Veliki Slap — the Great Waterfall — and at 78 meters, it's the tallest waterfall in Croatia. It's fed by the Plitvica stream, which runs for about 4 kilometers through the forest before plunging off this cliff face in a single dramatic drop.\n\nHere's something interesting: Veliki Slap isn't technically part of the main lake chain. The 16 cascading lakes are fed by the Black and White rivers, which merge to form the system. The Plitvica stream is a separate tributary that joins the Korana River right at the base of this falls, at the point called Sastavci — meaning "confluence." So you're looking at two water systems meeting.\n\nThe best viewpoint is from the lower boardwalk near the Korana canyon. In spring, when snowmelt swells the stream, the falls are at their most powerful and the mist can soak you from 50 meters away. The cliff face behind the falls is entirely travertine — calcium carbonate deposited over thousands of years by the same biological process that built every barrier in the park. You're looking at geology in action.`
+    },
+    {
+      id: "sastavci",
+      name: "Sastavci (The Confluence)",
+      lat: 44.9038,
+      lon: 15.6082,
+      category: "Waterfall",
+      one_liner: "Where the lake chain meets the Plitvica stream and becomes the Korana River.",
+      summary: `Sastavci means "confluence" in Croatian, and it's one of the most photogenic spots in the entire park. This is where the lowest lake, Novakovića Brod, spills over its final travertine barrier in a series of cascades, and right next to it, the Plitvica stream plunges down as Veliki Slap. The two waters merge here to form the Korana River, which then flows northward through its own canyon.\n\nThe viewpoint from the upper trail gives you that classic Plitvice postcard shot — multiple falls side by side tumbling into a misty gorge. The lower boardwalk takes you right to the base where you can feel the spray.\n\nThe Korana River that's born here was historically important — it powered mills and supported small settlements downstream. The village of Korana, just north of the park boundary, is one of the most charming places to stay near Plitvice, set along the river in a setting that feels completely removed from time.`
+    },
+    {
+      id: "kozjak",
+      name: "Lake Kozjak (Jezero Kozjak)",
+      lat: 44.8892,
+      lon: 15.6030,
+      category: "Lake",
+      one_liner: "The largest Plitvice lake — and the dividing line between Upper and Lower systems.",
+      summary: `Kozjak is the big one. At 81.5 hectares and over 2.3 kilometers long, it's the largest lake in the Plitvice system by a wide margin. It's also the deepest — plunging to 46 meters — and it serves as the natural dividing line between the Upper Lakes (which sit on dolomite) and the Lower Lakes (carved into limestone).\n\nThe electric boats that shuttle visitors between P1, P2, and P3 cross this lake. The P1-to-P3 ride takes about 30 minutes and gives you a chance to rest your legs while floating across water that ranges from deep emerald to almost navy blue depending on the light and depth.\n\nThe color of these lakes, by the way, isn't dye or mineral tinting in any simple sense. It's caused by the interaction of dissolved calcium carbonate, the depth of the water, the organisms living in it, and the angle of sunlight. That's why Kozjak — deep, wide, and surrounded by dense forest — tends to look darker and more dramatic than the shallower upper lakes, which lean turquoise.\n\nLook for the small cave entrance visible from the boat on the eastern shore — it's one of several karst caves in the park, formed by the same dissolution processes that created the entire lake system.`
+    },
+    {
+      id: "galovac",
+      name: "Lake Galovac",
+      lat: 44.8730,
+      lon: 15.5990,
+      category: "Lake",
+      one_liner: "Third-largest lake with spectacular cascading falls and ancient travertine stairs.",
+      summary: `Galovac is one of the gems of the Upper Lakes — the third largest in the system at 12.5 hectares, with a maximum depth of 24 meters. What makes it special is the series of cascading waterfalls that connect it to the lakes above and below.\n\nAs you approach from Gradinsko Lake, you'll see an extraordinary thing: concrete stairs that were built long ago to help visitors traverse the falls have been completely encrusted by travertine. The calcium carbonate deposition literally ate the stairs and turned them into natural-looking waterfalls. It's one of the best demonstrations in the park of how fast travertine grows — roughly 1 centimeter per year in active zones.\n\nThe large Galovački Buk waterfall at the north end of the lake drops about 20 meters and is fed by several smaller lakes that pool above it. Look for the thick cushions of Cratoneuron moss on the rocks — this is one of the key species whose branching structure traps calcium carbonate particles and actively builds travertine. Without this moss, the barriers would form far more slowly. The lakes are literally built by living organisms.`
+    },
+    {
+      id: "proscansko",
+      name: "Prošćansko Jezero",
+      lat: 44.8620,
+      lon: 15.5910,
+      category: "Lake",
+      one_liner: "The highest and second-largest lake, source of the entire cascade at 636m elevation.",
+      summary: `Prošćansko Jezero sits at 636 meters above sea level and is the headwater of the entire Plitvice lake system. It's the second largest lake at 68 hectares, with a depth of 37 meters, and it's fed by the Matica River — itself formed from the confluence of the Black River (Crna rijeka) and the White River (Bijela rijeka) that emerge from karst springs in the mountains.\n\nThis is the quietest part of the park. Most visitors on shorter routes never make it this far, so you'll find thick forest right down to the water's edge, and a stillness that the Lower Lakes rarely offer. The lake is surrounded by a mix of beech, fir, and spruce — representative of the Dinaric mountain forests that cover about 75% of the park's total area.\n\nFrom here, the water begins its 130-meter descent through 15 more lakes before exiting as the Korana River at the bottom. Every travertine barrier between here and there was built by the biological process you can see happening in real time on any mossy, splashing surface in the park. The calcium-rich water from these karst springs is essentially a mineral-loaded conveyor belt, and the moss and microbes are the construction crew.`
+    },
+    {
+      id: "ciginovac",
+      name: "Lake Ciginovac",
+      lat: 44.8670,
+      lon: 15.5930,
+      category: "Lake",
+      one_liner: "Second-highest lake, connected to Prošćansko by the Labudovački waterfall.",
+      summary: `Ciginovac — also written Ciganovac in some guides — is the second lake in the chain, sitting at 626 meters. It's connected to Prošćansko above by the Labudovački Slap (Swan Waterfall), one of the taller and more scenic falls in the upper system.\n\nThe lake itself is modest in size at 7 hectares, but it's a good place to observe the classic Plitvice geological setup: the travertine barrier at its outflow, where water spills over into the next lake (Okrugljak), is visibly growing. You can see the porous, sponge-like texture of fresh travertine on the moss-covered lips of the dam.\n\nThe water here has an almost unreal clarity — visibility can exceed 10 meters on calm days. This is because the lakes are oligotrophic, meaning very low in nutrients. The calcium carbonate in the water actually acts as a natural filter, trapping particles and sediment. Combined with the lack of agricultural runoff (the park's catchment is almost entirely forested), it produces water clarity that rivals the best mountain lakes anywhere in Europe.`
+    },
+    {
+      id: "milanovac",
+      name: "Lake Milanovac",
+      lat: 44.8960,
+      lon: 15.6082,
+      category: "Lake",
+      one_liner: "Upper lake of the Lower Lakes group, named after a historical local figure.",
+      summary: `Milanovac is the first lake you encounter in the Lower Lakes section — the transition point where the geology shifts from dolomite to limestone, and the landscape changes from wide forest basins to a narrow, cliff-walled canyon.\n\nThe lake sits at 523 meters elevation and covers about 3.2 hectares. Below it, the Milka Trnina waterfall drops into Lake Gavanovac. This waterfall was named in 1898 after Milka Trnina, a Croatian opera singer who was one of the leading sopranos of her era — she performed at the Metropolitan Opera and was famous across Europe. She donated money from her concerts to help preserve the park, upgrade the walking paths, and build the first real tourist infrastructure. It's a lovely gesture — an opera singer's name given to a waterfall, her voice metaphorically living on in the sound of falling water.\n\nThe Lower Lakes canyon from here down to Sastavci is about 2.5 kilometers, and the boardwalks are carved into and cantilevered from the cliff faces. It's the most dramatic walking section in the park.`
+    },
+    {
+      id: "gradinsko",
+      name: "Lake Gradinsko",
+      lat: 44.8790,
+      lon: 15.6010,
+      category: "Lake",
+      one_liner: "Reed-bordered lake with nesting wild ducks, linked to Kozjak.",
+      summary: `Gradinsko is one of the middle Upper Lakes, bordered by dense reeds that make it one of the best spots in the park for birdwatching. Wild ducks nest here regularly, and if you're quiet on the boardwalk, you'll often see mallards, tufted ducks, and occasionally a common merganser fishing in the clear water.\n\nThe series of cascades that link Gradinsko to Galovac above it are particularly beautiful — the water fans out across wide travertine shelves in a pattern that's constantly changing as the barriers grow and shift. It's a great spot to watch the travertine formation process up close.\n\nThe reeds and emergent vegetation around the lake edges play an important role in the ecosystem. They filter sediment, provide cover for fish (primarily brown trout in the upper lakes), and support amphibian populations. Look for the viviparous lizard on the rocks along the boardwalk — it's one of the few lizard species that gives live birth rather than laying eggs, an adaptation to the cooler mountain climate here.`
+    },
+    {
+      id: "kaludjerovac",
+      name: "Lake Kaluđerovac",
+      lat: 44.8990,
+      lon: 15.6100,
+      category: "Lake",
+      one_liner: "Deepest of the Lower Lakes, with stunning blue-green color from dissolved minerals.",
+      summary: `Kaluđerovac is the deepest of the four Lower Lakes and one of the most visually striking pools in the entire park. Its depth — combined with the limestone canyon walls that shade it for much of the day — gives it an intense blue-green color that can look almost artificial.\n\nThe name comes from "kaluđer," meaning monk, suggesting there may have been a hermitage or religious retreat near here historically. The Lower Lakes are generally named after people — Milanovac, Gavanovac, Kaluđerovac — while the Upper Lakes tend to have descriptive or geographic names.\n\nThe boardwalk through the Lower Lakes canyon passes right along the water's edge here, and in several spots you're walking on wooden planks just centimeters above the lake surface. Look down and you can see the bottom clearly — fallen branches coated in white calcium carbonate, fish darting through the extraordinarily clear water, and the occasional European pond turtle basking on submerged logs.`
+    },
+    {
+      id: "p3_boat",
+      name: "P3 Boat Terminal",
+      lat: 44.8990,
+      lon: 15.6045,
+      category: "Infrastructure",
+      one_liner: "Lower Lakes boat dock — connects to P1 across Kozjak.",
+      summary: `P3 is the boat terminal at the southern end of Kozjak, near the transition to the Lower Lakes. After walking through the Lower Lakes canyon, most visitors end up here and take the 30-minute electric boat ride back across Kozjak to P1 (near Entrance 2).\n\nThere's a small café and restrooms here — one of the few refreshment points inside the park. The boat ride itself is worth savoring. Kozjak is surrounded by dense forest, and on calm days the reflections are mirror-perfect. Keep an eye on the eastern shore for the cave entrance visible from the water.\n\nThe boats are electric to prevent pollution — water quality is everything here. The travertine formation process requires very specific chemical conditions: high calcium carbonate concentration, high dissolved oxygen, and low nutrient levels. Even small amounts of phosphorus or nitrogen from engine exhaust or wastewater could accelerate algae growth, which would change the pH balance and potentially slow or halt travertine deposition. The park's entire geological process depends on keeping these waters pristine.`
+    },
+    {
+      id: "supljara_cave",
+      name: "Šupljara Cave",
+      lat: 44.8998,
+      lon: 15.6110,
+      category: "Geology",
+      one_liner: "Limestone cave in the Lower Lakes canyon with views of Kaluđerovac.",
+      summary: `Šupljara Cave is one of several karst caves accessible from the Lower Lakes boardwalk trail. It's a relatively small cave — more of a deep overhang — but it gives you a dramatic framed view of the canyon and Lake Kaluđerovac below.\n\nThe cave formed through the same dissolution process that created the entire Plitvice landscape. Rainwater absorbs carbon dioxide as it passes through soil, becoming slightly acidic. This weak carbonic acid dissolves limestone (calcium carbonate) as it percolates underground, gradually enlarging cracks into passages, and passages into caves. It's the same karst process you see all across the Dinaric Alps — Slovenia's Postojna Cave, Montenegro's Lipa Cave, and dozens of others in Croatia.\n\nThe difference at Plitvice is that the dissolved calcium carbonate doesn't just disappear — it re-emerges in the spring water and gets redeposited as travertine. The caves are the dissolution side of the equation; the lake barriers are the precipitation side. Same mineral, same process, two opposite results.`
+    },
+    {
+      id: "jovic_memorial",
+      name: "Josip Jović Memorial",
+      lat: 44.9050,
+      lon: 15.6135,
+      category: "History",
+      one_liner: "Memorial to the first Croatian casualty of the 1991 War of Independence.",
+      summary: `Near Entrance 1 stands a memorial to Josip Jović, a 21-year-old Croatian police officer who was killed here on Easter Sunday, March 31, 1991 — widely considered the first combat fatality of the Croatian War of Independence.\n\nThe context: as Yugoslavia was fracturing, Croatian Serb paramilitaries seized control of the Plitvice Lakes National Park in late March 1991, part of the broader effort to carve out the self-proclaimed SAO Krajina. On Easter morning, Croatian special police units moved to retake the park. Their convoy was ambushed on the road near the entrance, and in the ensuing battle, Jović was killed by machine gun fire near the park's post office.\n\nThe park was occupied through the war and remained closed to visitors until after Operation Storm in August 1995. When it reopened, there was concern about damage, but remarkably, the lakes and travertine formations — products of geological time — weathered the human conflict largely intact. The forests sustained some damage from military activity.\n\nThe incident, known as "Bloody Easter" (Krvavi Uskrs), is commemorated annually. It's a reminder that this beautiful place exists in a landscape with recent, painful history.`
+    },
+    {
+      id: "corkova_uvala",
+      name: "Čorkova Uvala Primeval Forest",
+      lat: 44.8700,
+      lon: 15.5700,
+      category: "Nature",
+      one_liner: "One of the last virgin beech-fir forests in Europe — UNESCO recognized.",
+      summary: `West of the main lake trail lies Čorkova Uvala, one of the last remaining old-growth beech-fir forests in all of Europe. Some trees here are over 250 years old, reaching heights of 50 meters. The forest has never been commercially logged, making it an invaluable scientific reference for what Dinaric mountain forests looked like before human intervention.\n\nThere are two hiking trails through the forest: a longer 21-kilometer loop and a shorter 9-kilometer route. Both require proper hiking shoes and plenty of water — these are real forest trails, not the manicured boardwalks of the lake area.\n\nThe forest ecosystem is strikingly intact. The canopy is dominated by European beech (Fagus sylvatica) and silver fir (Abies alba), with Norway spruce (Picea abies) at higher elevations. The understory supports a remarkable diversity of fungi, lichens, mosses, and ferns. Dead and fallen trees are left in place — crucial for the hundreds of invertebrate species, cavity-nesting birds, and small mammals that depend on decaying wood.\n\nThis is also prime habitat for the park's large predators. The quiet, undisturbed forest is where bears den and wolves move through. If you hike here, make noise to avoid surprising wildlife.`
+    },
+    {
+      id: "labudovac_falls",
+      name: "Labudovački Slap",
+      lat: 44.8650,
+      lon: 15.5935,
+      category: "Waterfall",
+      one_liner: "The 'Swan Falls' linking Prošćansko Lake to the start of the cascade chain.",
+      summary: `Labudovački Slap — Swan Falls — marks the beginning of the Plitvice cascade proper. It's where water spills over the first major travertine barrier out of Prošćansko Lake and drops into Ciginovac, the second lake.\n\nHistorically, this is where the first tourist accommodation was built. In 1861, a guesthouse called "the Emperor's house" was erected at Velika Poljana nearby, used by imperial military officers. When Crown Princess Stéphanie of Belgium visited in 1888, paths were laid out for the first time, two of which still bear the names of Emperor Franz Joseph's daughters: Štefanijin Put (Stephanie's Path) and Dorotejin Put (Dorothea's Path).\n\nA Czech entrepreneur named Gustav Janeček built a restaurant here and in 1893 founded the Society for the Preservation of the Plitvice Lakes — the park's first organized conservation effort, more than 50 years before it was officially designated as a national park in 1949.\n\nThere's an information office here, one of the few inside the park itself, and it's a good spot to rest if you're doing the full Upper Lakes circuit.`
+    },
+    {
+      id: "golubnjaca_cave",
+      name: "Golubnjača Cave",
+      lat: 44.9010,
+      lon: 15.6130,
+      category: "Geology",
+      one_liner: "Little-visited cave in the Lower Lakes area — one of the park's quieter secrets.",
+      summary: `Golubnjača is a cave near the Lower Lakes that most visitors walk right past. It's off the main boardwalk circuit, which means it's one of the genuinely uncrowded spots in the park.\n\nThe cave takes its name from "golub" — pigeon or dove — and it's home to several bat species. The park has documented 22 bat species in total, making Plitvice one of the most bat-diverse protected areas in Croatia. Species found here include the greater horseshoe bat, the whiskered bat, and Miniopterus schreibersii, a long-winged species that roosts deep in cave systems.\n\nBats play an underappreciated role in the Plitvice ecosystem. As major insect consumers, they help regulate the populations of mosquitoes, moths, and other invertebrates. The park's 321 documented butterfly and moth species — an enormous number — exist in a delicate balance with their predators.\n\nThe cave itself is a straightforward karst formation: dissolved limestone creating chambers along fault lines in the bedrock. If you visit, bring a light and stay on any marked paths. And please don't disturb roosting bats — they're all protected under EU habitats directives.`
+    }
+  ],
+
+  // General interest (no specific location)
+  general: [
+    {
+      id: "gen_travertine",
+      name: "How Travertine Builds a Landscape",
+      category: "Geology",
+      one_liner: "The living geological process that created every lake and waterfall here.",
+      summary: `Here's the thing that makes Plitvice genuinely unique among the world's beautiful landscapes: it's building itself. Right now. Measurably.\n\nThe process works like this. Rainwater percolates through the soil, absorbing CO₂ to become weakly acidic. This water then dissolves the underlying limestone — calcium carbonate — as it moves through the karst bedrock. When it emerges from springs, the water is loaded with dissolved calcium carbonate and has a very high CO₂ concentration — over 7,000 parts per million in some spring measurements.\n\nAs this water flows into streams and over cascades, it releases CO₂ to the atmosphere (just like opening a carbonated drink). As CO₂ leaves the water, the calcium carbonate becomes supersaturated and begins to precipitate out — depositing as the mineral calcite on any available surface.\n\nBut here's where biology takes over. Mosses — especially Bryum and Cratoneuron species — provide an intricate, branching scaffold for the deposits. Algae and cyanobacteria growing on the moss further reduce local CO₂ through photosynthesis, which accelerates the precipitation. The result is that travertine doesn't just accumulate randomly — it builds up preferentially on living moss, creating porous, sponge-like rock that gradually hardens.\n\nThe barriers grow at roughly 1 to 3 centimeters per year. That means the Plitvice you see today looks measurably different from the Plitvice of 50 years ago. Old waterfalls disappear as their barriers grow tall enough to calm the flow. New ones appear as rising barriers redirect water. It's a landscape in slow, constant motion.`
+    },
+    {
+      id: "gen_karst",
+      name: "Karst: The Hidden Plumbing",
+      category: "Geology",
+      one_liner: "The porous limestone underworld that feeds the entire lake system.",
+      summary: `Everything you see on the surface at Plitvice — the lakes, the waterfalls, the springs — is just the visible output of an enormous underground plumbing system. This is karst terrain, and understanding it transforms how you see the landscape.\n\nKarst forms wherever soluble rock — limestone, dolomite, gypsum — is exposed to slightly acidic water. Over millions of years, the water dissolves channels, tunnels, and caves through the rock, creating an underground network that can carry entire rivers. The Dinaric Alps, the mountain range that Plitvice sits within, contain some of the most extensive karst terrain on Earth.\n\nThe park's water arrives from two main sources: the Black River (Crna Rijeka) and the White River (Bijela Rijeka), both of which emerge from karst springs in the mountains. These springs discharge water with high dissolved mineral content — the raw material for travertine.\n\nThe Upper Lakes sit on dolomite, a magnesium-rich limestone variant that's less soluble, so they tend to be wider and shallower. The Lower Lakes are carved into pure limestone, which dissolves more readily, producing the narrow canyon you walk through. Same park, two different geological personalities.`
+    },
+    {
+      id: "gen_bears",
+      name: "Europe's Big Three Predators",
+      category: "Wildlife",
+      one_liner: "Brown bears, grey wolves, and Eurasian lynx all live within the park.",
+      summary: `Plitvice is one of very few places in Europe where all three of the continent's largest predators — the European brown bear, the grey wolf, and the Eurasian lynx — maintain viable breeding populations in the same territory. That's remarkable.\n\nThe brown bear is the park's logo animal. There are an estimated 40 to 60 bears living within the park boundaries at any given time, though they range widely and move in and out seasonally. They're forest dwellers — primarily eating berries, nuts, insects, and the occasional deer. Despite the large tourist numbers on the boardwalks, the park has never recorded a bear attack on a visitor. The bears simply avoid the crowded lake areas.\n\nIf you want evidence of bears, take the quieter forest trails in the Upper Lakes area. Look for claw marks on beech trees (vertical scratches 1-2 meters up the trunk), overturned logs where bears have foraged for beetle larvae, and distinctive five-toed tracks in soft mud.\n\nTwo to three wolf packs — roughly 10 to 20 individuals — use the park's forests as part of their territory. Wolves are almost never seen; most long-term park rangers have never observed one in the open. Your best "wolf experience" would be hearing them howl on a winter evening. The park is currently GPS-tracking a young wolf to better understand movement patterns.\n\nThe Eurasian lynx is the rarest of the three. An active EU-funded conservation project — LIFE Lynx — is working to restore the lynx population, which suffers from a very small genetic pool.`
+    },
+    {
+      id: "gen_birds",
+      name: "Birdwatching at Plitvice",
+      category: "Wildlife",
+      one_liner: "Over 160 species, from golden eagles to tiny dippers on the cascades.",
+      summary: `The park has recorded over 160 bird species, making it one of Croatia's premier birding sites. The variety comes from the mix of habitats — deep forest, lake edges, reed beds, open meadows, and rocky cliffs each support different communities.\n\nThe star residents include the Eurasian eagle-owl, one of the world's largest owl species, and the golden eagle, which nests on cliff faces in the less-visited parts of the park. Both are year-round residents.\n\nBut for a visitor on the boardwalks, the most delightful bird to spot is the white-throated dipper. These stocky, dark little birds live right on the cascades — they walk underwater along stream beds, feeding on aquatic invertebrates. Seeing one bob and curtsey on a mossy rock before plunging into a waterfall is one of Plitvice's small, perfect moments.\n\nIn the reed beds around Gradinsko Lake and the shallower upper lakes, look for mallards, tufted ducks, and the occasional common merganser — a sleek diving duck with a narrow red bill. Black storks pass through during migration, and ospreys have been spotted fishing on Kozjak.\n\nThe park's 321 recorded butterfly and moth species are also worth noticing. Spring and early summer bring clouds of them to the meadows and forest edges — an almost absurd diversity that's tied to the intact, pesticide-free ecosystems here.`
+    },
+    {
+      id: "gen_water_color",
+      name: "Why the Lakes Change Color",
+      category: "Science",
+      one_liner: "The shifting palette of azure, emerald, grey, and turquoise — explained.",
+      summary: `The famous colors of the Plitvice Lakes — ranging from deep azure to vivid turquoise, emerald green, and sometimes steely grey — aren't produced by any single factor. They're the result of several things interacting.\n\nFirst, dissolved calcium carbonate. The high mineral content scatters short-wavelength blue light more effectively than long-wavelength red, giving the water a natural blue-green base tone. This is similar to why glacial lakes appear turquoise — suspended mineral particles scatter light.\n\nSecond, depth matters enormously. Shallow lakes like Batinovac and Vir tend to appear lighter and more turquoise because light bounces off the travertine-coated bottom. Deep lakes like Kozjak (46 meters) absorb more red light and appear darker blue or even navy.\n\nThird, the organisms in the water — algae, cyanobacteria, and diatoms — contribute green tones. Lakes with more biological activity lean greener; ultra-clean, low-nutrient lakes lean bluer.\n\nFourth, the surrounding environment matters. Forests reflect green light onto the lake surface. Limestone cliffs reflect white. Overcast skies produce grey tones; direct sunlight intensifies everything.\n\nAll of these variables change with the seasons, the weather, the time of day, and even the angle you're viewing from. The same lake can look completely different at 8 AM and 2 PM. No two visits produce the same palette. It's genuinely unrepeatable.`
+    },
+    {
+      id: "gen_history",
+      name: "From Devil's Garden to UNESCO",
+      category: "History",
+      one_liner: "How a wild karst wilderness became Croatia's most protected landscape.",
+      summary: `On 17th-century maps, this area was marked as "Vražji Vrt" — Devil's Garden. The rugged karst terrain, dense forests, and harsh winters of the Lika region made it inhospitable. But the lakes were known and named — the word "Plitvice" derives from the Croatian "plitvak" or "pličina," meaning shallow, a reference to the shallow basins that water fills across the travertine terraces.\n\nThe first written mention of the name Plitvice comes from 1777, by a priest named Dominik Vukasović from the nearby town of Otočac. By the mid-1800s, travelers were beginning to visit, and in 1861, the first guesthouse — called "the Emperor's house" — was built at Velika Poljana.\n\nThe real conservation story begins with Crown Princess Stéphanie's visit in 1888, which prompted the first proper trails. Gustav Janeček's 1893 preservation society was the first organized effort to protect the lakes. But official national park status didn't come until April 8, 1949, making Plitvice Croatia's first national park.\n\nIn 1979, UNESCO inscribed it as a World Heritage Site, recognizing both the active geological processes and the aesthetic value. The citation specifically highlights the travertine formation as an outstanding example of ongoing geological change — the park isn't just beautiful, it's scientifically important as a living laboratory.\n\nThe 1991-1995 war temporarily closed the park, but it survived and today receives over a million visitors per year — a success story that brings its own challenges around sustainability, which the park actively manages through timed entry, visitor caps, and strict trail rules.`
+    },
+    {
+      id: "gen_forest",
+      name: "The Forest That Covers 75% of the Park",
+      category: "Nature",
+      one_liner: "Most visitors see 2% of Plitvice — the rest is ancient woodland.",
+      summary: `Here's a perspective-shifting fact: the lakes and waterfalls that everyone comes to see cover less than 1% of the national park's total area. Forests cover about 75%. The park spans nearly 30,000 hectares — about 300 square kilometers — and the vast majority of it is woodland that most tourists never enter.\n\nThe dominant tree species are European beech and silver fir, forming a classic Dinaric montane forest. In the northeastern section, pure beech stands dominate. Elsewhere, beech and fir grow together, often with Norway spruce at higher elevations. The understory includes whitebeam, hornbeam, and various maple species.\n\nThe Čorkova Uvala area contains one of Europe's last truly primeval forests — trees over 250 years old that have never been logged. It was recognized alongside the park's other old-growth stands as part of a broader UNESCO recognition of ancient European beech forests.\n\nThe forest isn't just scenery — it's functionally essential to the lakes. Tree roots stabilize soil and prevent erosion. The forest canopy regulates temperature and humidity. And critically, the forested watershed filters water before it enters the lake system. The park's position statement is clear: if the forests degrade, water quality changes, and if water quality changes, travertine formation slows or stops. The lakes exist because the forest protects them.`
+    },
+    {
+      id: "gen_aquatic",
+      name: "Life Beneath the Surface",
+      category: "Wildlife",
+      one_liner: "Fish, crayfish, amphibians, and the microscopic organisms that build everything.",
+      summary: `The waters of Plitvice support a specialized and somewhat fragile aquatic community. The lakes are classified as oligotrophic to mesotrophic — low in nutrients, high in dissolved oxygen, and exceptionally clear, with visibility sometimes exceeding 10 meters.\n\nBrown trout are the native apex fish predator, especially in the upper lakes where water conditions suit them best. Prošćansko Lake, with its plankton and crayfish populations, is considered the best trout habitat. The native river crayfish (Astacus astacus) and stone crayfish (Austropotamobius torrentium) are both present and both strictly protected — they're sensitive bioindicators of water quality.\n\nUnfortunately, non-native fish species — chub and roach — were introduced at some point and have displaced trout from some of the lower lakes. It's a common conservation headache worldwide.\n\nAmong the 14 amphibian species, look for the brown frog in wet forested areas and the fire salamander, with its striking black-and-yellow pattern, along shaded paths after rain. The alpine or black salamander has also been recorded — a high-altitude specialist.\n\nBut the most important aquatic organisms here are the ones you can't easily see. The cyanobacteria, diatoms, and algae that colonize moss surfaces are the true engineers of Plitvice. Their metabolic activity — photosynthesis extracting CO₂, mucus secretions trapping mineral particles — is what drives travertine formation. Without these microorganisms, the entire lake system as you see it would not exist.`
+    },
+    {
+      id: "gen_seasons",
+      name: "Four Seasons, Four Different Parks",
+      category: "Practical",
+      one_liner: "Each season transforms Plitvice into an almost unrecognizable landscape.",
+      summary: `Spring (April-May) is when the park is at its most dramatic hydrologically. Snowmelt from the mountains swells every stream and waterfall to peak flow. Veliki Slap is thunderous. The cascades between the Upper Lakes become wide curtains of water. Wildflowers carpet the meadows, and the forest canopy is fresh, bright green. Crowds are moderate.\n\nSummer (June-August) brings warm temperatures perfect for long hikes, but also peak crowds. The park limits daily visitors with timed entry slots, and the boardwalks, especially in the Lower Lakes, can feel busy. Water levels drop, and some smaller cascades may thin or dry up. The compensating beauty is the richest green palette and the best conditions for the forest trails.\n\nAutumn (September-November) is arguably the photographer's season. The beech forests turn gold, orange, and russet, reflected in the still lake surfaces. Visitor numbers drop significantly. Water levels begin to recover from autumn rains. The light is lower and warmer, giving the lakes their most varied color range.\n\nWinter (December-March) transforms Plitvice into something almost unrecognizable. Waterfalls freeze into massive ice sculptures. Snow blankets the boardwalks and forest trails. The park is open but some routes are closed. Visitor numbers are minimal. It's the season when wolves are most often heard — their howls carry far across the silent, frozen landscape. Utterly magical, but you'll need proper winter hiking gear.`
+    },
+    {
+      id: "gen_rules",
+      name: "Why the Rules Exist",
+      category: "Practical",
+      one_liner: "No swimming, no leaving trails — and the science behind why.",
+      summary: `The park rules might seem strict — no swimming, no wading, no fishing, no leaving marked trails, no touching the travertine formations — but every one of them exists for a specific ecological reason.\n\nNo swimming or wading: The lakes serve as drinking water for surrounding communities, but more importantly, the travertine barriers are extremely fragile. A person stepping on an active barrier can crack through the thin crust of newly deposited calcite and destroy months or years of formation. The barriers look like rock, but the active growing surface is often just a thin shell over soft, wet moss.\n\nNo leaving trails: The vegetation, especially the moss communities on the barriers and the rare plant species in meadow habitats, is highly sensitive to trampling. The park has 18 protected plant species, including the lady's slipper orchid (Cypripedium calceolus). One shortcut across a meadow can damage plants that take decades to establish.\n\nThe wooden boardwalks are specifically designed to hover above the travertine without touching it — look at how they're supported on posts driven into the bedrock beside the barriers, not into the barriers themselves.\n\nEutrophication is the park's biggest long-term threat. If excess nutrients enter the water — from sunscreen washing off swimmers, food waste, or wastewater — algae blooms follow. These change the water chemistry and can weaken or dissolve the travertine barriers. The park has been fighting this battle since tourism began accelerating, and so far, the barriers are holding.`
+    }
+  ]
+};
+
+
+// ═══════════════════════════════════════════
+//  APP STATE & LOGIC
+// ═══════════════════════════════════════════
+
+let currentTab = 'nearby';
+let userLat = null, userLon = null;
+let map, userMarker, poiMarkers = [];
+let watchId = null;
+let currentDetailPOI = null;
+let speechUtterance = null;
+let isSpeaking = false;
+let notifiedPOIs = new Set();
+let lastToastPOI = null;
+
+// Haversine distance in meters
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function formatDistance(meters) {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters/1000).toFixed(1)}km`;
+}
+
+// ── Map setup ──
+function initMap() {
+  map = L.map('map', {
+    center: [44.887, 15.603],
+    zoom: 14,
+    zoomControl: false,
+    attributionControl: false
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19
+  }).addTo(map);
+
+  // Add POI markers
+  POI_DATA.located.forEach(poi => {
+    const icon = L.divIcon({ className: 'poi-marker', iconSize: [10, 10] });
+    const marker = L.marker([poi.lat, poi.lon], { icon }).addTo(map);
+    marker.bindTooltip(poi.name, {
+      className: 'poi-tooltip',
+      direction: 'top',
+      offset: [0, -8]
+    });
+    marker.on('click', () => openDetail(poi));
+    poiMarkers.push({ marker, poi });
+  });
+}
+
+// ── Geolocation ──
+function startTracking() {
+  if (!navigator.geolocation) {
+    document.getElementById('gpsStatus').textContent = 'Geolocation not available';
+    return;
+  }
+
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+
+      document.getElementById('gpsDot').classList.add('active');
+      document.getElementById('gpsStatus').textContent =
+        `${userLat.toFixed(5)}, ${userLon.toFixed(5)}`;
+
+      // Update user marker
+      if (userMarker) {
+        userMarker.setLatLng([userLat, userLon]);
+      } else {
+        const icon = L.divIcon({ className: 'user-marker', iconSize: [14, 14] });
+        userMarker = L.marker([userLat, userLon], { icon, zIndexOffset: 1000 }).addTo(map);
+        map.setView([userLat, userLon], 15);
+      }
+
+      // Check proximity
+      checkProximity();
+      if (currentTab === 'nearby') renderCards();
+    },
+    err => {
+      document.getElementById('gpsStatus').textContent = 'Location error — using default view';
+      console.warn('Geolocation error:', err);
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+function checkProximity() {
+  if (!userLat) return;
+  const NOTIFY_RADIUS = 100; // meters
+
+  POI_DATA.located.forEach(poi => {
+    const dist = haversine(userLat, userLon, poi.lat, poi.lon);
+    if (dist < NOTIFY_RADIUS && !notifiedPOIs.has(poi.id)) {
+      notifiedPOIs.add(poi.id);
+      showToast(poi, dist);
+
+      // Vibrate if supported
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    }
+  });
+
+  // Update nearby count
+  const nearbyCount = POI_DATA.located.filter(p =>
+    haversine(userLat, userLon, p.lat, p.lon) < 500
+  ).length;
+  document.getElementById('nearbyCount').textContent =
+    nearbyCount > 0 ? `${nearbyCount} within 500m` : '';
+
+  // Update marker styles
+  poiMarkers.forEach(({ marker, poi }) => {
+    const dist = haversine(userLat, userLon, poi.lat, poi.lon);
+    const el = marker.getElement();
+    if (el) {
+      if (dist < 150) {
+        el.querySelector('div')?.classList.add('nearby-marker');
+      } else {
+        el.querySelector('div')?.classList.remove('nearby-marker');
+      }
+    }
+  });
+}
+
+// ── Toast notifications ──
+function showToast(poi, dist) {
+  lastToastPOI = poi;
+  document.getElementById('toastTitle').textContent = poi.name;
+  document.getElementById('toastSub').textContent = `${formatDistance(dist)} away — Tap to learn more`;
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 8000);
+}
+
+function onToastTap() {
+  document.getElementById('toast').classList.remove('show');
+  if (lastToastPOI) openDetail(lastToastPOI);
+}
+
+// ── Tabs ──
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab)
+  );
+  renderCards();
+}
+
+// ── Card rendering ──
+function renderCards() {
+  const container = document.getElementById('cardsContainer');
+
+  if (currentTab === 'nearby') {
+    let items = POI_DATA.located.map(poi => ({
+      ...poi,
+      distance: userLat ? haversine(userLat, userLon, poi.lat, poi.lon) : null
+    }));
+
+    if (userLat) {
+      items.sort((a, b) => a.distance - b.distance);
+    }
+
+    if (items.length === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="icon">📍</div>No location-based points loaded.</div>`;
+      return;
+    }
+
+    container.innerHTML = items.map(poi => `
+      <div class="card ${poi.distance && poi.distance < 150 ? 'nearby' : ''}"
+           onclick="openDetail(POI_DATA.located.find(p=>p.id==='${poi.id}'))">
+        <div class="card-top">
+          <div class="card-title">${poi.name}</div>
+          ${poi.distance !== null
+            ? `<span class="card-badge badge-distance">${formatDistance(poi.distance)}</span>`
+            : `<span class="card-badge badge-category">${poi.category}</span>`
+          }
+        </div>
+        <div class="card-oneliner">${poi.one_liner}</div>
+      </div>
+    `).join('');
+
+  } else {
+    // General tab
+    container.innerHTML = POI_DATA.general.map(poi => `
+      <div class="card" onclick="openDetail(POI_DATA.general.find(p=>p.id==='${poi.id}'))">
+        <div class="card-top">
+          <div class="card-title">${poi.name}</div>
+          <span class="card-badge badge-category">${poi.category}</span>
+        </div>
+        <div class="card-oneliner">${poi.one_liner}</div>
+      </div>
+    `).join('');
+  }
+}
+
+// ── Detail view ──
+function openDetail(poi) {
+  currentDetailPOI = poi;
+  document.getElementById('detailTitle').textContent = poi.name;
+  document.getElementById('detailBody').innerHTML =
+    poi.summary.split('\n\n').map(p => `<p>${p}</p>`).join('');
+
+  // Show/hide navigate button
+  const navBtn = document.getElementById('navBtn');
+  if (poi.lat && poi.lon) {
+    navBtn.style.display = 'flex';
+  } else {
+    navBtn.style.display = 'none';
+  }
+
+  // Reset speak button
+  stopSpeak();
+
+  document.getElementById('detailView').classList.add('open');
+  document.getElementById('detailView').scrollTop = 0;
+}
+
+function closeDetail() {
+  stopSpeak();
+  document.getElementById('detailView').classList.remove('open');
+  currentDetailPOI = null;
+}
+
+function navigateTo() {
+  if (!currentDetailPOI || !currentDetailPOI.lat) return;
+  const { lat, lon, name } = currentDetailPOI;
+  // Try Google Maps, fall back to Apple Maps
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
+  window.open(url, '_blank');
+}
+
+// ── Text-to-Speech ──
+function toggleSpeak() {
+  if (isSpeaking) {
+    stopSpeak();
+  } else {
+    startSpeak();
+  }
+}
+
+function startSpeak() {
+  if (!currentDetailPOI || !window.speechSynthesis) return;
+
+  stopSpeak();
+
+  const text = currentDetailPOI.summary.replace(/\n/g, ' ');
+  speechUtterance = new SpeechSynthesisUtterance(text);
+  speechUtterance.rate = 0.95;
+  speechUtterance.pitch = 1.0;
+
+  // Try to find a good English voice
+  const voices = speechSynthesis.getVoices();
+  const preferred = voices.find(v => v.name.includes('Samantha')) ||
+                    voices.find(v => v.lang.startsWith('en') && v.localService) ||
+                    voices.find(v => v.lang.startsWith('en'));
+  if (preferred) speechUtterance.voice = preferred;
+
+  speechUtterance.onend = () => {
+    isSpeaking = false;
+    updateSpeakButton();
+    document.getElementById('gpsDot').classList.remove('speaking');
+  };
+
+  speechSynthesis.speak(speechUtterance);
+  isSpeaking = true;
+  updateSpeakButton();
+  document.getElementById('gpsDot').classList.add('speaking');
+}
+
+function stopSpeak() {
+  if (speechSynthesis.speaking || speechSynthesis.pending) {
+    speechSynthesis.cancel();
+  }
+  isSpeaking = false;
+  speechUtterance = null;
+  updateSpeakButton();
+  document.getElementById('gpsDot').classList.remove('speaking');
+}
+
+function updateSpeakButton() {
+  const btn = document.getElementById('speakBtn');
+  const icon = document.getElementById('speakIcon');
+  const label = document.getElementById('speakLabel');
+  if (isSpeaking) {
+    btn.classList.add('speaking-btn');
+    btn.classList.remove('primary');
+    icon.textContent = '⏸';
+    label.textContent = 'Stop';
+  } else {
+    btn.classList.remove('speaking-btn');
+    btn.classList.add('primary');
+    icon.textContent = '🔊';
+    label.textContent = 'Listen';
+  }
+}
+
+// Ensure voices are loaded
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = () => {};
+}
+
+// ── Init ──
+initMap();
+renderCards();
+startTracking();
+</script>
+</body>
+</html>
