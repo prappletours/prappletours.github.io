@@ -812,7 +812,10 @@ function initMap() {
     scrollWheelZoom: false,
     touchZoom: true
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(leafletMap);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    keepBuffer: 6
+}).addTo(leafletMap);
 
   POI_DATA.located.forEach(poi => {
     const icon = L.divIcon({ className: 'poi-marker', iconSize: [20,20], iconAnchor: [10,10] });
@@ -849,9 +852,11 @@ function toggleFullscreenMap() {
       document.getElementById('mapToggle').textContent = 'Map ▾';
       document.getElementById('mapToggle').classList.add('active');
     }
-    c.classList.add('fullscreen');
+        c.classList.add('fullscreen');
     closeBtn.classList.add('visible');
+    leafletMap.invalidateSize();
     setTimeout(() => leafletMap.invalidateSize(), 50);
+    setTimeout(() => leafletMap.invalidateSize(), 350);
   } else {
     c.classList.remove('fullscreen');
     closeBtn.classList.remove('visible');
