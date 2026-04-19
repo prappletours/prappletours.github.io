@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Pula — Walking Guide</title>
+<title>Rovinj — Walking Guide</title>
 <meta name="theme-color" content="#0a1d1d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -490,7 +490,7 @@
 
   <div class="header">
     <div class="header-row">
-      <h1>Pula</h1>
+      <h1>Rovinj</h1>
       <div class="header-buttons">
         <button class="refresh-btn" id="refreshBtn" onclick="refreshLocation()" title="Refresh location">↻</button>
         <button class="map-toggle" id="fullscreenBtn" onclick="toggleFullscreenMap()">⛶</button>
@@ -570,7 +570,7 @@ const NEARBY_HIGHLIGHT = 150;
 //  POI DATA
 // ═══════════════════════════════════════════════════
 let POI_DATA;
-fetch('pula.json')
+fetch('rovinj.json')
   .then(r => r.json())
   .then(data => {
     POI_DATA = data;
