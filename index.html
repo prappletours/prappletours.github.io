@@ -791,6 +791,7 @@ function openDetailById(group, id) {
 }
 
 function openDetail(poi) {
+  if (mapVisible) toggleMap();
   currentDetailPOI = poi;
   document.getElementById('detailTitle').textContent = poi.name;
   document.getElementById('detailBody').innerHTML = poi.summary.split('\n\n').map(p => '<p>'+p+'</p>').join('');
@@ -808,6 +809,7 @@ function closeDetail() {
   stopSpeak();
   document.getElementById('detailView').classList.remove('open');
   currentDetailPOI = null;
+  if (!mapVisible) toggleMap();
 }
 
 function navigateTo() {
