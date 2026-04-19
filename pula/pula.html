@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Pula Old Town — Walking Guide</title>
+<title>Pula — Walking Guide</title>
 <meta name="theme-color" content="#0a1d1d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -80,6 +80,59 @@
   }
   .map-toggle.active { color: var(--accent); border-color: rgba(78,205,196,0.3); }
 
+  .header-buttons {
+    display: flex;
+    gap: 4px;
+  }
+  .refresh-btn {
+    font-size: 14px;
+    color: var(--text3);
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .refresh-btn.spinning { animation: spin 0.8s ease; }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Fullscreen map mode */
+  .map-container.fullscreen {
+    position: fixed;
+    inset: 0;
+    height: 100% !important;
+    padding: 0 !important;
+    z-index: 150;
+    opacity: 1;
+  }
+  .map-container.fullscreen #map {
+    border-radius: 0;
+    border: none;
+  }
+  .map-close-btn {
+    position: fixed;
+    top: 12px; right: 12px;
+    z-index: 160;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--bg3);
+    color: var(--text);
+    font-size: 18px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    font-family: inherit;
+  }
+  .map-close-btn.visible { display: flex; }
+
   .status-bar {
     display: flex;
     align-items: center;
@@ -104,7 +157,7 @@
   /* ─── Map: fixed height, collapsible, never scrolls ─── */
   .map-container {
     flex: 0 0 auto;
-    height: 360px;
+    height: 180px;
     padding: 0 12px 6px;
     transition: height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
     overflow: hidden;
@@ -159,7 +212,7 @@
     min-height: 0; /* allows flex child to shrink below content */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 0 12px 24px;
+    padding: 0 12px 100px;
   }
 
   /* ─── Cards ─── */
@@ -375,11 +428,59 @@
     box-shadow: 0 0 10px var(--accent);
   }
   .poi-marker {
-    width: 9px; height: 9px;
+    width: 20px; height: 20px;
     background: var(--orange);
     border: 2px solid var(--bg);
     border-radius: 50%;
-    opacity: 0.8;
+    opacity: 0.85;
+    cursor: pointer;
+  }
+
+  /* ─── POI preview popup on map ─── */
+  .leaflet-popup-content-wrapper {
+    background: var(--card) !important;
+    border: 1px solid var(--accent) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+    padding: 0 !important;
+  }
+  .leaflet-popup-content {
+    margin: 0 !important;
+    min-width: 160px;
+  }
+  .leaflet-popup-tip {
+    background: var(--card) !important;
+    border: 1px solid var(--accent) !important;
+    border-top: none !important;
+    border-left: none !important;
+  }
+  .leaflet-popup-close-button {
+    color: var(--text3) !important;
+    font-size: 18px !important;
+    top: 4px !important;
+    right: 6px !important;
+  }
+  .poi-popup {
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .poi-popup-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 3px;
+    padding-right: 14px;
+  }
+  .poi-popup-liner {
+    font-size: 11px;
+    color: var(--text3);
+    line-height: 1.3;
+  }
+  .poi-popup-tap {
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 6px;
+    font-weight: 600;
   }
 </style>
 </head>
@@ -389,8 +490,12 @@
 
   <div class="header">
     <div class="header-row">
-      <h1>Pula Old Town</h1>
-      <button class="map-toggle active" id="mapToggle" onclick="toggleMap()">Map ▾</button>
+      <h1>Pula</h1>
+      <div class="header-buttons">
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshLocation()" title="Refresh location">↻</button>
+        <button class="map-toggle" id="fullscreenBtn" onclick="toggleFullscreenMap()">⛶</button>
+        <button class="map-toggle active" id="mapToggle" onclick="toggleMap()">Map ▾</button>
+      </div>
     </div>
     <div class="status-bar">
       <div class="status-dot" id="gpsDot"></div>
@@ -402,6 +507,7 @@
   <div class="map-container" id="mapContainer">
     <div id="map"></div>
   </div>
+  <button class="map-close-btn" id="mapCloseBtn" onclick="toggleFullscreenMap()">✕</button>
 
   <div class="tabs">
     <div class="tab active" data-tab="nearby" onclick="switchTab('nearby')">📍 Nearby</div>
@@ -450,7 +556,7 @@
 // Path to pre-generated MP3 files. Set to a folder like "audio/"
 // and name files as {poi_id}.mp3 (e.g. audio/veliki_slap.mp3).
 // Set to null to skip and use browser TTS or copy-for-voice.
-const AUDIO_BASE_PATH = "audio/";
+const AUDIO_BASE_PATH = null;
 
 // Prompt prepended when user taps "Copy for Voice" to paste into
 // ChatGPT voice mode, Claude, etc.
@@ -464,7 +570,7 @@ const NEARBY_HIGHLIGHT = 150;
 //  POI DATA
 // ═══════════════════════════════════════════════════
 
-const POI_DATA = {
+const POI_DATA =  {
   "located": [
     {
       "id": "pula_arena",
@@ -546,7 +652,52 @@ const POI_DATA = {
       "category": "History",
       "one_liner": "An Austro-Hungarian coastal fortress from 1860, guarding the southern approaches to Pula's harbor.",
       "summary": "Fort Stoja sits on the Stoja peninsula approximately three kilometers west-southwest of Pula's old town, at an elevation of about fifteen meters above the Adriatic. It is a polygonal armored coastal fort, a type developed in the mid-nineteenth century as artillery power grew to render older rounded fortifications obsolete. Construction began in 1859 and 1860 and was extended in phases through 1869, 1885, 1909, and 1914, producing a structure approximately 135 meters in length adapted to successive improvements in naval gunnery. The fort's mission was to control the sea approach to Pula's harbor from the south and southwest.\n\nTo understand why this fort was built at all, the broader story of Pula under Austrian rule matters. After the Napoleonic wars, the Austrian Empire identified Pula Bay as the ideal location for its main Adriatic naval base. The bay is exceptionally well-sheltered, deep enough to handle large warships, and positioned to project power across the northern Adriatic. What had been a small and partly depopulated town was transformed across the nineteenth century into one of the most heavily fortified ports in Europe, with three concentric rings of fortifications, a purpose-built naval arsenal, dry docks, and support infrastructure for what eventually became the Austro-Hungarian Imperial and Royal Navy fleet. By 1900, Pula's population had grown to nearly sixty thousand — from a few thousand in the early 1800s — almost entirely as a result of military and naval construction.\n\nFort Stoja was one of two coastal forts built to protect the harbor mouth from the south, the other being Fort Verudela on the adjacent peninsula. Together they formed an interlocking field of fire across the approaches that any hostile fleet would have to navigate. Tunnels were excavated beneath the fort for storing sea mines and torpedoes. In December 1897, a radio mast was erected here for telegraphic communication — an early adoption of the technology that had only been demonstrated publicly by Marconi the previous year.\n\nThe fort never fired in anger. The Austrian navy engaged in limited operations during the First World War, and the formidable Pula fortification system ultimately served more as deterrent than battlefield. After the war, Italy took possession of Istria under the terms of the 1920 Treaty of Rapallo, and the naval infrastructure passed to the Italian Regia Marina. After the Second World War and the settlement that transferred Istria to Yugoslavia in 1947, the site came under the Yugoslav Navy.\n\nToday the Stoja peninsula is a quiet natural area known for its pine-forested shore, rocky coves, and clear water. The fort itself, managed by the Arena Hospitality Group, can be visited externally. The broad view from this promontory — over the bay toward Brijuni in the north, and south toward the open Adriatic — makes clear why anyone who wanted to control this stretch of sea chose this exact spot."
-    }
+    },
+    {
+    "id": "kastel_citadel",
+    "name": "Kaštel (Venetian Citadel)",
+    "lat": 44.8703,
+    "lon": 13.8456,
+    "category": "History",
+    "one_liner": "A 1630s star fortress on Pula's hilltop, built over three thousand years of continuous fortification.",
+    "summary": "The hill you are standing beneath has been occupied by one fortification or another for roughly three thousand years. The Histri built a hillfort here before Roman conquest. The Romans stationed a military garrison and established the acropolis of Pietas Iulia on the same ground. A medieval castle followed, controlled in the thirteenth century by the Castropola family, the dominant patrician clan in medieval Pula, before Venice expelled them to Treviso in 1331 and demolished their stronghold. What you see today was built between 1630 and 1633, replacing all of that.\n\nThe context matters: Pula's Kaštel was commissioned during the Thirty Years War, the catastrophic Central European conflict that killed as many as eight million people between 1618 and 1648 and reshaped the political map of the continent. Venice, worried about Austro-Bavarian pressure and Ottoman naval ambitions in the Adriatic, needed a defensible anchor at its most southerly Istrian port. The Venice Senate engaged Antoine de Ville, a military engineer originally from Toulouse, who was at the time one of the most sought-after fortification designers in Europe. His other works included fortifications at Lyon and several projects for the French crown. De Ville designed the Kaštel as a trace italienne fortress in a star plan: a rectangular central core with four angular pentagonal bastions projecting outward at each corner, their angled faces designed to deflect cannon fire and eliminate dead ground. Each bastion carried the name of a Venetian patrician family. Construction used stone quarried from the ruins of the Large Roman Theatre on the nearby Monte Zaro slope, which was largely consumed by the project and survives today only in scattered fragments.\n\nThe fortress sat at the center of a broader Venetian defensive system that also included two embankment lines — roughly following today's Castropola Street and the outer perimeter of the medieval walls — and a fort on St. Andrew's island in the bay. In the early seventeenth century, before steam-powered vessels and rifled artillery, this was a credible deterrent. With the Peace of Westphalia in 1648 and the end of the Thirty Years War, the urgency passed, and maintenance became irregular. Austria took over the fortress in 1797, renamed it the Hafenkastell, and converted it into barracks, an observation post, ammunition storage, and a prison. A water cistern was added to the outer north wall in 1861, making the fortress part of Pula's first modern municipal water supply.\n\nFrom the bastions on a clear day you can identify the Brijuni archipelago to the northwest, the Arena immediately below, the harbor shipyards, and on good days the Kvarner islands to the east. The Historical and Maritime Museum of Istria now occupies the interior, with collections covering Pula and the broader Istrian region from prehistory through the twentieth century. A lift in the adjacent Zerostrasse tunnel system connects directly to the fortress, so the underground and the hilltop can be visited in a single circuit."
+  },
+  {
+    "id": "fort_san_giorgio",
+    "name": "Fort San Giorgio (Monte Ghiro)",
+    "lat": 44.882,
+    "lon": 13.8556,
+    "category": "History",
+    "one_liner": "A mid-19th century circular Austrian artillery tower, the northernmost fort in Pula's city ring.",
+    "summary": "Fort San Giorgio sits on the hill of Monte Ghiro at 51 meters above sea level, close to Pula's city cemetery. It is the northernmost fort in the chain of circular artillery towers that the Austrian Empire built across the hills encircling Pula between 1852 and 1856 — the first concentrated phase of fortification after the decision was made to develop Pula as the primary naval base of the Habsburg fleet. The chain continues south from here with Fort Monvidal, Fort San Michele, and eventually Fort Casoni Vecchi and Fort Bourguignon at the southern end of the arc.\n\nAll the forts in this inner ring share the same basic typology: circular towers of carefully dressed limestone, roughly 34 meters in diameter, designed to mount artillery around their perimeters and resist bombardment from the surrounding terrain. The circular form was a deliberate adaptation of the Martello tower concept developed in the Napoleonic wars, scaled up and made permanent. Fort San Giorgio was built between 1852 and 1854, with modifications in 1914 when the Austrian military added improvements in response to the evolving nature of First World War artillery.\n\nAt the heart of the fort is a round courtyard with a central cistern — the self-sufficiency of these structures in case of siege was a design requirement. The entrance passes through a protected vestibule designed to slow and channel any attackers who breached the outer gate. The fort contains 16 casemates, the vaulted chambers cut into the thickness of the walls that provided protected positions for cannon crews. Most were intended as artillery positions; records suggest that in the original design, only one casemate was assigned a non-combat function.\n\nBy the 1880s and 1890s, the rapid development of rifled breech-loading artillery had rendered towers of this height obsolete as fighting positions — they were too exposed to direct fire from modern guns that could be placed beyond visual range. The inner ring of circular forts was progressively demoted from active defense to secondary functions: observation, supply storage, barracks, and communication. The outer ring of polygonal and armored forts built from the 1860s onward became the actual fighting positions.\n\nThe exterior of Fort San Giorgio is accessible and can be walked around. The interior has been closed to visitors for most of the post-war period, though the stonework is visible and the architectural form is fully legible from outside. The motto of the Italian 74th Infantry Regiment, Sempre avanti ad ogni costo — Always forward at any cost — was carved into the entrance during the Italian occupation between the wars, a reminder of the layered military history embedded in these structures. The fort is surrounded by paths used by local dog walkers and runners, and the overgrown vegetation of the surrounding slope gives it a more romantic and melancholy character than the more accessible forts elsewhere in the system."
+  },
+  {
+    "id": "fort_casoni_vecchi",
+    "name": "Fort Casoni Vecchi",
+    "lat": 44.8638,
+    "lon": 13.854,
+    "category": "History",
+    "one_liner": "An 1852 Austrian circular fort, once a punk festival venue, now hosting cultural events.",
+    "summary": "Fort Casoni Vecchi stands on Vidikovac hill at 55 meters above sea level, toward the southern end of the chain of circular forts the Austrian Empire built across Pula's hills between 1852 and 1856. Like its counterparts San Giorgio to the north and Bourguignon to the south, it is a circular artillery tower roughly 34 meters in diameter, built from dressed Istrian limestone in the mid-century defensive typology that the Habsburg military adopted as its standard first response to the new gunpowder threats. Construction ran from 1852 to 1854, with modifications in 1914.\n\nThe fort contains sixteen casemates in the thickness of its outer wall, all but one positioned as artillery emplacements directed outward over the surrounding terrain. In the event of siege, the internal cistern system provided independent water supply. This self-sufficiency was a standard design requirement for the entire generation of circular forts: they were conceived as nodes in a distributed defensive network that could hold individually even if the surrounding positions fell. The practical reality was that by the time construction was complete, advances in rifled artillery were already making the high-profile circular form strategically questionable, and within two decades the more powerful outer ring of polygonal forts had superseded the city ring in actual military importance.\n\nCasoni Vecchi translates roughly as Old Barracks or Old Houses, a name that suggests the hill was already associated with military use before the Austrian fort was built. The site is protected as cultural heritage under Croatian law, which limits but does not prevent modification or adaptive reuse. The fort gained an unlikely second life in the 1990s when it hosted the Monte Paradiso punk music festival — raw concrete and stone chambers, natural acoustic oddity, and a degree of institutional indifference made it a compelling venue for a subculture that tends to find use in abandoned infrastructure. The festival is no longer active at this location.\n\nIn recent years, a local civic association, Udruga Casoni Vecchi, took over maintenance and programming of the fort on a voluntary basis under agreement with the City of Pula. With minimal external funding, the association has organized exhibitions, concerts, and community events in the courtyard and casemates, working against the momentum of neglect that has affected most of Pula's inner ring forts. The interior is intermittently accessible for events and occasionally for group visits. The hillside location offers one of the better elevated views over the southern bay and the Verudela peninsula. The contrast between the ruined stonework, the overgrown slopes, and the visible Adriatic below gives the site a character quite different from the more formally managed forts."
+  },
+  {
+    "id": "zerostrasse",
+    "name": "Zerostrasse (Underground Tunnels)",
+    "lat": 44.8705,
+    "lon": 13.8474,
+    "category": "History",
+    "one_liner": "A WWI underground tunnel network beneath Kaštel hill, built to shelter the city's entire population.",
+    "summary": "Below the streets and buildings of central Pula runs an extensive network of tunnels, galleries, and chambers built in the years immediately before and during the First World War. The system is known as Zerostrasse, a German-Italian hybrid name meaning roughly Street Level Zero, referring to the subterranean plane on which the underground passages operate. The main entrance accessible to visitors today is at Carrarina Street, just behind the Twin Gates, placing this attraction directly in the middle of the city's most concentrated zone of ancient monuments.\n\nPula at the outbreak of the First World War was the primary naval base of the Austro-Hungarian Empire and housed not only the fleet but a large civilian and military population that worked in the arsenal, the shipyards, the naval hospital, and the administrative infrastructure. Air bombardment had become a realistic threat by 1914 — fixed-wing military aviation was only a decade old, but its potential against fixed installations was already understood. The Austro-Hungarian military responded by drilling into every significant hill in the city center. The hills of Monte Ghiro and Kaštel received the largest tunnel systems. Construction involved blasting and hand excavation through the karst limestone, and the resulting passages were stabilized and lined to create functional shelters.\n\nThe accessible section of Zerostrasse under Kaštel hill is approximately 400 meters long. The passages are 3 to 6 meters wide and about 2.5 meters high, with four entrance shafts on different sides of the hill converging in a central chamber. This cross-shaped layout was not accidental: the entrances were positioned to create through-ventilation, so air temperature in the tunnels remains between 14 and 18 degrees Celsius throughout the year, regardless of external conditions. Side rooms along the corridors served as personnel quarters, kitchens, storage, and four prison cells. The section under Kaštel alone was designed to shelter approximately six thousand people.\n\nAfter the First World War, Italian authorities expanded the network rather than abandoning it. During the Second World War, Allied bombing raids made the tunnels essential again, and sections were adapted as emergency hospitals. Cold War-era additions in the 1950s and 1960s extended the network with fallout shelters — locally called atomic shelters — sized and sealed against radiological contamination. The total shelter capacity of all tunnel systems beneath Pula, including these later additions, reached approximately 50,000 people, nearly matching the city's entire population.\n\nA lift inside the Zerostrasse connects directly upward to the Kaštel fortress, so a single ticket allows a visitor to move from the underground galleries to the bastions with panoramic views above — one of the more striking experiential contrasts available at any historical site in Croatia. The tunnel section currently open to visitors includes a permanent exhibition on the early history of aviation in Pula, a subject that connects directly to why the tunnels were built."
+  },
+  {
+    "id": "church_of_saint_anthony",
+    "name": "Church of Saint Anthony of Padua",
+    "lat": 44.8742,
+    "lon": 13.8497,
+    "category": "Religious",
+    "one_liner": "A 1931 Franciscan church with a 45-meter bell tower, the tallest structure in Pula.",
+    "summary": "The Church of Saint Anthony of Padua is the newest significant religious building in Pula, completed in 1931, and its 45-meter bell tower is the tallest structure in the city. The tower is visible from a wide area including the Arena, the old town, and much of the harbor approach, making the church a navigational landmark even for those who never enter it. Its visual relationship with the nearby Arena — a pagan Roman entertainment structure and a Catholic Franciscan church separated by barely two hundred meters — encapsulates the overlapping temporal layers that define this part of the Adriatic coast.\n\nThe church was designed by Guido Brass, then city architect of Pula, who provided the plans without charge. Construction was funded entirely by parishioner contributions and took two years from the laying of the foundation stone on 4 October 1929, the feast day of Saint Francis, to the blessing of the completed building on 1 November 1931. The opening was reported by the local newspaper Corriere Istriano as the fulfillment of a long-expressed civic desire. The timing of the dedication to Saint Francis is significant: 1931 was the seven hundredth anniversary of Francis's death, making the church's consecration a deliberate commemorative gesture.\n\nThe building stands on a prominent topographic step above the arena waterfront, accessed by an exterior stone staircase that makes use of the sloping terrain. The entrance portico, supported by two columns, gives the facade a degree of formality that the otherwise plain surfaces do not claim. The style is neo-Romanesque, characterized by rounded arches, solid masonry walls, and an emphasis on structural clarity over decorative elaboration. Brass worked in what was then called Historic Revival or Romanesque Revival style — the same broad tradition that shaped numerous civic and ecclesiastical buildings across Austro-Hungarian and early Italian Pula. The interior is a three-aisled basilica with marble paving added in 1936 and a decorated apse constructed in 1939. The decorative program includes frescoes and stained glass that were added progressively through the 1930s and 1940s.\n\nThe Franciscan order was entrusted with the church in 1939. The Franciscans had a long prior history in Pula — the thirteenth-century Franciscan monastery on the western slope of Kaštel hill dates from the early decades after Francis himself is said to have traveled through Istria around 1229, founding religious houses along the Adriatic coast. Napoleon dissolved the Franciscan establishments in Pula in 1806. The Franciscan presence in the city was not reestablished until the 1920s, which is why a community of 60,000 people had only one parish as late as 1929, and why Father Tito Castagna, Provincial of the Venetian Franciscan Province, pushed so energetically for a new church within the city rather than at the suburban Šijana location that had initially been proposed. A small monastery adjoining the church was completed in 1934; a second monastery was added in 1961."
+  }
   ],
   "general": [
     {
@@ -637,6 +788,7 @@ let currentAudio = null;
 let notifiedPOIs = new Set();
 let lastToastPOI = null;
 let mapVisible = true;
+let mapFullscreen = false;
 
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -663,13 +815,19 @@ function initMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(leafletMap);
 
   POI_DATA.located.forEach(poi => {
-    const icon = L.divIcon({ className: 'poi-marker', iconSize: [9,9] });
+    const icon = L.divIcon({ className: 'poi-marker', iconSize: [20,20], iconAnchor: [10,10] });
     const m = L.marker([poi.lat, poi.lon], { icon }).addTo(leafletMap);
-    m.on('click', () => openDetail(poi));
+    const popupContent = `<div class="poi-popup" onclick="onPopupTap('${poi.id}')">
+      <div class="poi-popup-name">${poi.name}</div>
+      <div class="poi-popup-liner">${poi.one_liner}</div>
+      <div class="poi-popup-tap">Tap to open ›</div>
+    </div>`;
+    m.bindPopup(popupContent, { closeButton: true, offset: [0, -6], autoPan: true, autoPanPadding: [20, 20] });
   });
 }
 
 function toggleMap() {
+  if (mapFullscreen) return;
   mapVisible = !mapVisible;
   const c = document.getElementById('mapContainer');
   const b = document.getElementById('mapToggle');
@@ -679,31 +837,80 @@ function toggleMap() {
   if (mapVisible) setTimeout(() => leafletMap.invalidateSize(), 350);
 }
 
+function toggleFullscreenMap() {
+  mapFullscreen = !mapFullscreen;
+  const c = document.getElementById('mapContainer');
+  const closeBtn = document.getElementById('mapCloseBtn');
+
+  if (mapFullscreen) {
+    if (!mapVisible) {
+      mapVisible = true;
+      c.classList.remove('collapsed');
+      document.getElementById('mapToggle').textContent = 'Map ▾';
+      document.getElementById('mapToggle').classList.add('active');
+    }
+    c.classList.add('fullscreen');
+    closeBtn.classList.add('visible');
+    setTimeout(() => leafletMap.invalidateSize(), 50);
+  } else {
+    c.classList.remove('fullscreen');
+    closeBtn.classList.remove('visible');
+    setTimeout(() => leafletMap.invalidateSize(), 350);
+  }
+}
+
 
 // ── GPS ──
+function updatePosition(lat, lon) {
+  userLat = lat;
+  userLon = lon;
+  document.getElementById('gpsDot').classList.add('active');
+  document.getElementById('gpsStatus').textContent = userLat.toFixed(4)+', '+userLon.toFixed(4);
+
+  if (userMarker) { userMarker.setLatLng([userLat, userLon]); }
+  else {
+    const icon = L.divIcon({ className: 'user-marker', iconSize: [14,14] });
+    userMarker = L.marker([userLat, userLon], { icon, zIndexOffset: 1000 }).addTo(leafletMap);
+    leafletMap.setView([userLat, userLon], 15);
+  }
+  checkProximity();
+  if (currentTab === 'nearby') renderCards();
+}
+
 function startTracking() {
   if (!navigator.geolocation) {
     document.getElementById('gpsStatus').textContent = 'Geolocation not available';
     return;
   }
-  navigator.geolocation.watchPosition(
-    pos => {
-      userLat = pos.coords.latitude;
-      userLon = pos.coords.longitude;
-      document.getElementById('gpsDot').classList.add('active');
-      document.getElementById('gpsStatus').textContent = userLat.toFixed(4)+', '+userLon.toFixed(4);
 
-      if (userMarker) { userMarker.setLatLng([userLat, userLon]); }
-      else {
-        const icon = L.divIcon({ className: 'user-marker', iconSize: [14,14] });
-        userMarker = L.marker([userLat, userLon], { icon, zIndexOffset: 1000 }).addTo(leafletMap);
-        leafletMap.setView([userLat, userLon], 15);
-      }
-      checkProximity();
-      if (currentTab === 'nearby') renderCards();
-    },
-    () => { document.getElementById('gpsStatus').textContent = 'No GPS — cards sorted by name'; },
+  // Primary: watchPosition for continuous updates
+  navigator.geolocation.watchPosition(
+    pos => updatePosition(pos.coords.latitude, pos.coords.longitude),
+    () => { document.getElementById('gpsStatus').textContent = 'No GPS — tap ↻ to retry'; },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+
+  // Fallback: poll every 30s in case watchPosition silently dies (common on iOS Safari)
+  setInterval(() => {
+    navigator.geolocation.getCurrentPosition(
+      pos => updatePosition(pos.coords.latitude, pos.coords.longitude),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+    );
+  }, 30000);
+}
+
+function refreshLocation() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  setTimeout(() => btn.classList.remove('spinning'), 800);
+
+  if (!navigator.geolocation) return;
+  document.getElementById('gpsStatus').textContent = 'Updating…';
+  navigator.geolocation.getCurrentPosition(
+    pos => updatePosition(pos.coords.latitude, pos.coords.longitude),
+    () => { document.getElementById('gpsStatus').textContent = 'Location update failed'; },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
   );
 }
 
@@ -776,6 +983,14 @@ function renderCards() {
 function openDetailById(group, id) {
   const poi = POI_DATA[group].find(p => p.id === id);
   if (poi) openDetail(poi);
+}
+
+function onPopupTap(poiId) {
+  const poi = POI_DATA.located.find(p => p.id === poiId);
+  if (!poi) return;
+  leafletMap.closePopup();
+  if (mapFullscreen) toggleFullscreenMap();
+  openDetail(poi);
 }
 
 function openDetail(poi) {
