@@ -844,7 +844,7 @@ function startSpeak() {
 
   // Try pre-generated audio file first
   if (AUDIO_BASE_PATH) {
-    const url = AUDIO_BASE_PATH + currentDetailPOI.id + '.mp3';
+    const url = AUDIO_BASE_PATH + currentDetailPOI.id + '.aac';
     currentAudio = new Audio(url);
 
     currentAudio.addEventListener('canplaythrough', () => {
