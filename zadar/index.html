@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Zadar — Walking Guide</title>
+<meta name="theme-color" content="#0a1d1d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #0a1d1d;
+    --bg2: #0f2b2b;
+    --bg3: #163838;
+    --card: #122e2e;
+    --card-hover: #1a3d3d;
+    --accent: #4ecdc4;
+    --accent2: #2ab7a9;
+    --water: #45b7d1;
+    --text: #e8f4f0;
+    --text2: #a0c4bc;
+    --text3: #6a9e94;
+    --orange: #f4a261;
+    --red: #e07a5f;
+    --green: #81b29a;
+    --radius: 14px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  /* ─── CRITICAL: Full-height flex shell, no body scroll ─── */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    height: 100vh; /* fallback */
+    overflow: hidden;
+  }
+
+  /* ─── Header: fixed, never scrolls ─── */
+  .header {
+    flex: 0 0 auto;
+    background: var(--bg);
+    padding: 10px 16px 8px;
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    background: linear-gradient(135deg, var(--accent), var(--water));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .map-toggle {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text3);
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .map-toggle.active { color: var(--accent); border-color: rgba(78,205,196,0.3); }
+
+  .header-buttons {
+    display: flex;
+    gap: 4px;
+  }
+  .refresh-btn {
+    font-size: 14px;
+    color: var(--text3);
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .refresh-btn.spinning { animation: spin 0.8s ease; }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Fullscreen map mode */
+  .map-container.fullscreen {
+    position: fixed;
+    inset: 0;
+    height: 100% !important;
+    padding: 0 !important;
+    z-index: 150;
+    opacity: 1;
+  }
+  .map-container.fullscreen #map {
+    border-radius: 0;
+    border: none;
+  }
+  .map-close-btn {
+    position: fixed;
+    top: 12px; right: 12px;
+    z-index: 160;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--bg3);
+    color: var(--text);
+    font-size: 18px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    font-family: inherit;
+  }
+  .map-close-btn.visible { display: flex; }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+  }
+  .status-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .status-dot.speaking { background: var(--orange); box-shadow: 0 0 6px var(--orange); animation: pulse 1.2s ease infinite; }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.6; transform:scale(1.4); }
+  }
+
+  /* ─── Map: fixed height, collapsible, never scrolls ─── */
+  .map-container {
+    flex: 0 0 auto;
+    height: 360px;
+    padding: 0 12px 6px;
+    transition: height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
+    overflow: hidden;
+  }
+  .map-container.collapsed {
+    height: 0;
+    padding: 0 12px 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #map {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius);
+    border: 1px solid var(--bg3);
+  }
+  .leaflet-container {
+    background: var(--bg2);
+    touch-action: none; /* prevent map from capturing page scroll */
+  }
+
+  /* ─── Tabs: fixed, never scrolls ─── */
+  .tabs {
+    flex: 0 0 auto;
+    display: flex;
+    padding: 0 12px 8px;
+    gap: 4px;
+  }
+  .tab {
+    flex: 1;
+    padding: 9px 0;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text3);
+    background: var(--bg2);
+    border: 1px solid var(--bg3);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .tab.active {
+    color: var(--accent);
+    background: var(--bg3);
+    border-color: var(--accent);
+  }
+
+  /* ─── CRITICAL: This is the ONLY scrollable area ─── */
+  .scroll-area {
+    flex: 1 1 0;
+    min-height: 0; /* allows flex child to shrink below content */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px 100px;
+  }
+
+  /* ─── Cards ─── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--bg3);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .card:active { background: var(--card-hover); }
+  .card.nearby { border-color: rgba(78,205,196,0.3); }
+  .card.nearby::before { opacity: 1; }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .card-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 15px;
+    line-height: 1.3;
+    flex: 1;
+  }
+  .card-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .badge-distance { background: rgba(78,205,196,0.15); color: var(--accent); }
+  .badge-category { background: rgba(244,162,97,0.15); color: var(--orange); }
+  .card-oneliner { font-size: 13px; color: var(--text2); line-height: 1.4; }
+
+  /* ─── Detail overlay: full screen, own scroll ─── */
+  .detail-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--bg);
+    display: none;
+    flex-direction: column;
+  }
+  .detail-overlay.open { display: flex; }
+
+  .detail-header {
+    flex: 0 0 auto;
+    background: var(--bg);
+    padding: 12px 16px 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--bg3);
+  }
+  .detail-back {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid rgba(78,205,196,0.2);
+    color: var(--text);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .detail-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    flex: 1;
+    line-height: 1.3;
+  }
+
+  .detail-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 6px;
+    border-radius: 10px;
+    border: 1px solid var(--bg3);
+    background: var(--bg2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .action-btn.primary {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+  .action-btn.speaking-btn {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: var(--bg);
+  }
+  .action-btn.copied {
+    background: var(--green);
+    border-color: var(--green);
+    color: var(--bg);
+  }
+
+  /* Audio progress */
+  .audio-progress {
+    flex: 0 0 auto;
+    padding: 0 16px 4px;
+    display: none;
+  }
+  .audio-progress.visible { display: block; }
+  .progress-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--bg3);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s linear;
+  }
+
+  .detail-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 20px 40px;
+  }
+  .detail-scroll p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text2);
+    margin-bottom: 14px;
+  }
+
+  /* ─── Toast ─── */
+  .toast {
+    position: fixed;
+    bottom: 20px; left: 12px; right: 12px;
+    z-index: 300;
+    background: var(--card);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    cursor: pointer;
+    animation: toastIn 0.3s ease;
+  }
+  .toast.show { display: flex; }
+  @keyframes toastIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .toast-icon {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: rgba(78,205,196,0.15);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .toast-text { flex: 1; }
+  .toast-title { font-weight: 600; font-size: 13px; }
+  .toast-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ─── Leaflet marker styles ─── */
+  .user-marker {
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border: 3px solid var(--bg);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--accent);
+  }
+  .poi-marker {
+    width: 20px; height: 20px;
+    background: var(--orange);
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    opacity: 0.85;
+    cursor: pointer;
+  }
+
+  /* ─── POI preview popup on map ─── */
+  .leaflet-popup-content-wrapper {
+    background: var(--card) !important;
+    border: 1px solid var(--accent) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+    padding: 0 !important;
+  }
+  .leaflet-popup-content {
+    margin: 0 !important;
+    min-width: 160px;
+  }
+  .leaflet-popup-tip {
+    background: var(--card) !important;
+    border: 1px solid var(--accent) !important;
+    border-top: none !important;
+    border-left: none !important;
+  }
+  .leaflet-popup-close-button {
+    color: var(--text3) !important;
+    font-size: 18px !important;
+    top: 4px !important;
+    right: 6px !important;
+  }
+  .poi-popup {
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .poi-popup-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 3px;
+    padding-right: 14px;
+  }
+  .poi-popup-liner {
+    font-size: 11px;
+    color: var(--text3);
+    line-height: 1.3;
+  }
+  .poi-popup-tap {
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 6px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <div class="header">
+    <div class="header-row">
+      <h1>Zadar</h1>
+      <div class="header-buttons">
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshLocation()" title="Refresh location">↻</button>
+        <button class="map-toggle" id="fullscreenBtn" onclick="toggleFullscreenMap()">⛶</button>
+        <button class="map-toggle active" id="mapToggle" onclick="toggleMap()">Map ▾</button>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="gpsDot"></div>
+      <span id="gpsStatus">Waiting for location…</span>
+      <span style="margin-left:auto" id="nearbyCount"></span>
+    </div>
+  </div>
+
+  <div class="map-container" id="mapContainer">
+    <div id="map"></div>
+  </div>
+  <button class="map-close-btn" id="mapCloseBtn" onclick="toggleFullscreenMap()">✕</button>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="nearby" onclick="switchTab('nearby')">📍 Nearby</div>
+    <div class="tab" data-tab="general" onclick="switchTab('general')">📖 General</div>
+  </div>
+
+  <div class="scroll-area" id="scrollArea"></div>
+
+</div>
+
+<div class="detail-overlay" id="detailView">
+  <div class="detail-header">
+    <button class="detail-back" onclick="closeDetail()">←</button>
+    <div class="detail-title" id="detailTitle"></div>
+  </div>
+  <div class="detail-actions">
+    <button class="action-btn primary" id="speakBtn" onclick="toggleSpeak()">
+      <span id="speakIcon">🔊</span> <span id="speakLabel">Listen</span>
+    </button>
+    <button class="action-btn" id="copyVoiceBtn" onclick="copyForVoice()">
+      📋 <span id="copyLabel">Copy for Voice</span>
+    </button>
+    <button class="action-btn" id="navBtn" onclick="navigateTo()" style="display:none">
+      🧭 Navigate
+    </button>
+  </div>
+  <div class="audio-progress" id="audioProgress">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+  <div class="detail-scroll" id="detailBody"></div>
+</div>
+
+<div class="toast" id="toast" onclick="onToastTap()">
+  <div class="toast-icon">📍</div>
+  <div class="toast-text">
+    <div class="toast-title" id="toastTitle"></div>
+    <div class="toast-sub" id="toastSub">Tap to learn more</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  CONFIG — Change these for your setup
+// ═══════════════════════════════════════════════════
+
+// Path to pre-generated MP3 files. Set to a folder like "audio/"
+// and name files as {poi_id}.mp3 (e.g. audio/veliki_slap.mp3).
+// Set to null to skip and use browser TTS or copy-for-voice.
+const AUDIO_BASE_PATH = "audio/";
+
+// Prompt prepended when user taps "Copy for Voice" to paste into
+// ChatGPT voice mode, Claude, etc.
+const VOICE_PROMPT = "Read the following aloud in a warm, engaging, conversational tone — as if you're a knowledgeable friend walking with me through a national park. Keep it natural, not performative:\n\n";
+
+const NOTIFY_RADIUS = 100;
+const NEARBY_HIGHLIGHT = 150;
+
+
+// ═══════════════════════════════════════════════════
+//  POI DATA
+// ═══════════════════════════════════════════════════
+let POI_DATA;
+fetch('zadar.json')
+  .then(r => r.json())
+  .then(data => {
+    POI_DATA = data;
+    initMap();
+    renderCards();
+    startTracking();
+  });
+
+
+// ═══════════════════════════════════════════════════
+//  APP STATE
+// ═══════════════════════════════════════════════════
+
+let currentTab = 'nearby';
+let userLat = null, userLon = null;
+let leafletMap, userMarker;
+let currentDetailPOI = null;
+let speechUtterance = null;
+let isSpeaking = false;
+let currentAudio = null;
+let notifiedPOIs = new Set();
+let lastToastPOI = null;
+let mapVisible = true;
+let mapFullscreen = false;
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function formatDist(m) { return m < 1000 ? Math.round(m)+'m' : (m/1000).toFixed(1)+'km'; }
+
+
+// ── Map ──
+function initMap() {
+  leafletMap = L.map('map', {
+    center: [44.887, 15.603],
+    zoom: 14,
+    zoomControl: false,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+    touchZoom: true
+  });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    keepBuffer: 6
+}).addTo(leafletMap);
+
+  POI_DATA.located.forEach(poi => {
+    const icon = L.divIcon({ className: 'poi-marker', iconSize: [20,20], iconAnchor: [10,10] });
+    const m = L.marker([poi.lat, poi.lon], { icon }).addTo(leafletMap);
+    const popupContent = `<div class="poi-popup" onclick="onPopupTap('${poi.id}')">
+      <div class="poi-popup-name">${poi.name}</div>
+      <div class="poi-popup-liner">${poi.one_liner}</div>
+      <div class="poi-popup-tap">Tap to open ›</div>
+    </div>`;
+    m.bindPopup(popupContent, { closeButton: true, offset: [0, -6], autoPan: true, autoPanPadding: [20, 20] });
+  });
+}
+
+function toggleMap() {
+  if (mapFullscreen) return;
+  mapVisible = !mapVisible;
+  const c = document.getElementById('mapContainer');
+  const b = document.getElementById('mapToggle');
+  c.classList.toggle('collapsed', !mapVisible);
+  b.textContent = mapVisible ? 'Map ▾' : 'Map ▸';
+  b.classList.toggle('active', mapVisible);
+  if (mapVisible) setTimeout(() => leafletMap.invalidateSize(), 350);
+}
+
+function toggleFullscreenMap() {
+  mapFullscreen = !mapFullscreen;
+  const c = document.getElementById('mapContainer');
+  const closeBtn = document.getElementById('mapCloseBtn');
+
+  if (mapFullscreen) {
+    if (!mapVisible) {
+      mapVisible = true;
+      c.classList.remove('collapsed');
+      document.getElementById('mapToggle').textContent = 'Map ▾';
+      document.getElementById('mapToggle').classList.add('active');
+    }
+        c.classList.add('fullscreen');
+    closeBtn.classList.add('visible');
+    leafletMap.invalidateSize();
+    setTimeout(() => leafletMap.invalidateSize(), 50);
+    setTimeout(() => leafletMap.invalidateSize(), 350);
+  } else {
+    c.classList.remove('fullscreen');
+    closeBtn.classList.remove('visible');
+    setTimeout(() => leafletMap.invalidateSize(), 350);
+  }
+}
+
+
+// ── GPS ──
+function updatePosition(lat, lon) {
+  userLat = lat;
+  userLon = lon;
+  document.getElementById('gpsDot').classList.add('active');
+  document.getElementById('gpsStatus').textContent = userLat.toFixed(4)+', '+userLon.toFixed(4);
+
+  if (userMarker) { userMarker.setLatLng([userLat, userLon]); }
+  else {
+    const icon = L.divIcon({ className: 'user-marker', iconSize: [14,14] });
+    userMarker = L.marker([userLat, userLon], { icon, zIndexOffset: 1000 }).addTo(leafletMap);
+    leafletMap.setView([userLat, userLon], 15);
+  }
+  checkProximity();
+  if (currentTab === 'nearby') renderCards();
+}
+
+function startTracking() {
+  if (!navigator.geolocation) {
+    document.getElementById('gpsStatus').textContent = 'Geolocation not available';
+    return;
+  }
+
+  // Primary: watchPosition for continuous updates
+  navigator.geolocation.watchPosition(
+    pos => updatePosition(pos.coords.latitude, pos.coords.longitude),
+    () => { document.getElementById('gpsStatus').textContent = 'No GPS — tap ↻ to retry'; },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+
+  // Fallback: poll every 30s in case watchPosition silently dies (common on iOS Safari)
+  setInterval(() => {
+    navigator.geolocation.getCurrentPosition(
+      pos => updatePosition(pos.coords.latitude, pos.coords.longitude),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+    );
+  }, 30000);
+}
+
+function refreshLocation() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  setTimeout(() => btn.classList.remove('spinning'), 800);
+
+  if (!navigator.geolocation) return;
+  document.getElementById('gpsStatus').textContent = 'Updating…';
+  navigator.geolocation.getCurrentPosition(
+    pos => updatePosition(pos.coords.latitude, pos.coords.longitude),
+    () => { document.getElementById('gpsStatus').textContent = 'Location update failed'; },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+  );
+}
+
+function checkProximity() {
+  if (!userLat) return;
+  POI_DATA.located.forEach(poi => {
+    const d = haversine(userLat, userLon, poi.lat, poi.lon);
+    if (d < NOTIFY_RADIUS && !notifiedPOIs.has(poi.id)) {
+      notifiedPOIs.add(poi.id);
+      showToast(poi, d);
+      if (navigator.vibrate) navigator.vibrate([100,50,100]);
+    }
+  });
+  const nc = POI_DATA.located.filter(p => haversine(userLat,userLon,p.lat,p.lon)<500).length;
+  document.getElementById('nearbyCount').textContent = nc > 0 ? nc+' within 500m' : '';
+}
+
+
+// ── Toast ──
+function showToast(poi, dist) {
+  lastToastPOI = poi;
+  document.getElementById('toastTitle').textContent = poi.name;
+  document.getElementById('toastSub').textContent = formatDist(dist)+' away — Tap to learn more';
+  document.getElementById('toast').classList.add('show');
+  setTimeout(() => document.getElementById('toast').classList.remove('show'), 8000);
+}
+function onToastTap() {
+  document.getElementById('toast').classList.remove('show');
+  if (lastToastPOI) openDetail(lastToastPOI);
+}
+
+
+// ── Tabs & Cards ──
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  renderCards();
+  document.getElementById('scrollArea').scrollTop = 0;
+}
+
+function renderCards() {
+  const c = document.getElementById('scrollArea');
+  if (currentTab === 'nearby') {
+    let items = POI_DATA.located.map(p => ({...p, distance: userLat ? haversine(userLat,userLon,p.lat,p.lon) : null}));
+    if (userLat) items.sort((a,b) => a.distance - b.distance);
+    c.innerHTML = items.map(p => `
+      <div class="card ${p.distance && p.distance < NEARBY_HIGHLIGHT ? 'nearby' : ''}" onclick="openDetailById('located','${p.id}')">
+        <div class="card-top">
+          <div class="card-title">${p.name}</div>
+          ${p.distance !== null
+            ? `<span class="card-badge badge-distance">${formatDist(p.distance)}</span>`
+            : `<span class="card-badge badge-category">${p.category}</span>`}
+        </div>
+        <div class="card-oneliner">${p.one_liner}</div>
+      </div>`).join('');
+  } else {
+    c.innerHTML = POI_DATA.general.map(p => `
+      <div class="card" onclick="openDetailById('general','${p.id}')">
+        <div class="card-top">
+          <div class="card-title">${p.name}</div>
+          <span class="card-badge badge-category">${p.category}</span>
+        </div>
+        <div class="card-oneliner">${p.one_liner}</div>
+      </div>`).join('');
+  }
+}
+
+
+// ── Detail ──
+function openDetailById(group, id) {
+  const poi = POI_DATA[group].find(p => p.id === id);
+  if (poi) openDetail(poi);
+}
+
+function onPopupTap(poiId) {
+  const poi = POI_DATA.located.find(p => p.id === poiId);
+  if (!poi) return;
+  leafletMap.closePopup();
+  if (mapFullscreen) toggleFullscreenMap();
+  openDetail(poi);
+}
+
+function openDetail(poi) {
+  if (mapVisible) toggleMap();
+  currentDetailPOI = poi;
+  document.getElementById('detailTitle').textContent = poi.name;
+  document.getElementById('detailBody').innerHTML = poi.summary.split('\n\n').map(p => '<p>'+p+'</p>').join('');
+  document.getElementById('navBtn').style.display = (poi.lat && poi.lon) ? 'flex' : 'none';
+  stopSpeak();
+  document.getElementById('audioProgress').classList.remove('visible');
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('copyLabel').textContent = 'Copy for Voice';
+  document.getElementById('copyVoiceBtn').classList.remove('copied');
+  document.getElementById('detailView').classList.add('open');
+  document.querySelector('.detail-scroll').scrollTop = 0;
+}
+
+function closeDetail() {
+  stopSpeak();
+  document.getElementById('detailView').classList.remove('open');
+  currentDetailPOI = null;
+  if (!mapVisible) toggleMap();
+}
+
+function navigateTo() {
+  if (!currentDetailPOI?.lat) return;
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentDetailPOI.lat},${currentDetailPOI.lon}&travelmode=walking`, '_blank');
+}
+
+
+// ── Copy for Voice App ──
+function copyForVoice() {
+  if (!currentDetailPOI) return;
+  const text = VOICE_PROMPT + currentDetailPOI.summary;
+  navigator.clipboard.writeText(text).then(() => {
+    document.getElementById('copyLabel').textContent = 'Copied!';
+    document.getElementById('copyVoiceBtn').classList.add('copied');
+    setTimeout(() => {
+      document.getElementById('copyLabel').textContent = 'Copy for Voice';
+      document.getElementById('copyVoiceBtn').classList.remove('copied');
+    }, 2000);
+  }).catch(() => {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    document.getElementById('copyLabel').textContent = 'Copied!';
+    document.getElementById('copyVoiceBtn').classList.add('copied');
+    setTimeout(() => {
+      document.getElementById('copyLabel').textContent = 'Copy for Voice';
+      document.getElementById('copyVoiceBtn').classList.remove('copied');
+    }, 2000);
+  });
+}
+
+
+// ── Audio / TTS ──
+function toggleSpeak() { isSpeaking ? stopSpeak() : startSpeak(); }
+
+function startSpeak() {
+  if (!currentDetailPOI) return;
+  stopSpeak();
+
+  // Try pre-generated audio file first
+  if (AUDIO_BASE_PATH) {
+    const url = AUDIO_BASE_PATH + currentDetailPOI.id + '.mp3';
+    currentAudio = new Audio(url);
+
+    currentAudio.addEventListener('canplaythrough', () => {
+      currentAudio.play();
+      isSpeaking = true;
+      updateSpeakUI();
+      document.getElementById('audioProgress').classList.add('visible');
+    }, { once: true });
+
+    currentAudio.addEventListener('timeupdate', () => {
+      if (currentAudio && currentAudio.duration) {
+        document.getElementById('progressFill').style.width =
+          (currentAudio.currentTime / currentAudio.duration * 100) + '%';
+      }
+    });
+
+    currentAudio.addEventListener('ended', () => {
+      isSpeaking = false;
+      updateSpeakUI();
+    });
+
+    currentAudio.addEventListener('error', () => {
+      currentAudio = null;
+      useBrowserTTS(); // fallback
+    });
+    return;
+  }
+
+  useBrowserTTS();
+}
+
+function useBrowserTTS() {
+  if (!currentDetailPOI || !window.speechSynthesis) return;
+  const text = currentDetailPOI.summary.replace(/\n/g, ' ');
+  speechUtterance = new SpeechSynthesisUtterance(text);
+  speechUtterance.rate = 0.95;
+
+  const voices = speechSynthesis.getVoices();
+  const v = voices.find(v => v.name.includes('Samantha')) ||
+            voices.find(v => v.lang.startsWith('en') && v.localService) ||
+            voices.find(v => v.lang.startsWith('en'));
+  if (v) speechUtterance.voice = v;
+
+  speechUtterance.onend = () => { isSpeaking = false; updateSpeakUI(); };
+  speechSynthesis.speak(speechUtterance);
+  isSpeaking = true;
+  updateSpeakUI();
+}
+
+function stopSpeak() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+    document.getElementById('audioProgress').classList.remove('visible');
+  }
+  if (window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending)) {
+    speechSynthesis.cancel();
+  }
+  isSpeaking = false;
+  speechUtterance = null;
+  updateSpeakUI();
+}
+
+function updateSpeakUI() {
+  const btn = document.getElementById('speakBtn');
+  const icon = document.getElementById('speakIcon');
+  const label = document.getElementById('speakLabel');
+  document.getElementById('gpsDot').classList.toggle('speaking', isSpeaking);
+  if (isSpeaking) {
+    btn.classList.add('speaking-btn');
+    btn.classList.remove('primary');
+    icon.textContent = '⏸'; label.textContent = 'Stop';
+  } else {
+    btn.classList.remove('speaking-btn');
+    btn.classList.add('primary');
+    icon.textContent = '🔊'; label.textContent = 'Listen';
+  }
+}
+
+if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = () => {};
+}
+
+
+// ── Init ──
+
+</script>
+</body>
+</html>
